@@ -1,0 +1,61 @@
+# Example configuration showing various command types
+
+commands:
+  # Git commands
+  - name: "Current Branch"
+    cmd: "git"
+    args: ["branch", "--show-current"]
+  
+  - name: "Last Commit"
+    cmd: "git"
+    args: ["log", "-1", "--pretty=format:%h - %an, %ar : %s"]
+  
+  - name: "Git Status"
+    cmd: "git"
+    args: ["status", "--short"]
+  
+  - name: "Uncommitted Changes"
+    cmd: "git"
+    args: ["diff", "--stat"]
+  
+  - name: "Remote URL"
+    cmd: "git"
+    args: ["remote", "get-url", "origin"]
+  
+  # File system checks
+  - name: "Count Files"
+    cmd: "sh"
+    args: ["-c", "find . -type f | wc -l"]
+  
+  - name: "Disk Usage"
+    cmd: "du"
+    args: ["-sh", "."]
+  
+  # Language-specific checks (uncomment as needed)
+  
+  # Node.js projects
+  # - name: "NPM Outdated"
+  #   cmd: "npm"
+  #   args: ["outdated"]
+  
+  # - name: "Package.json Scripts"
+  #   cmd: "sh"
+  #   args: ["-c", "cat package.json | grep '\"scripts\"' -A 20"]
+  
+  # Python projects
+  # - name: "Python Version"
+  #   cmd: "python"
+  #   args: ["--version"]
+  
+  # - name: "Requirements"
+  #   cmd: "cat"
+  #   args: ["requirements.txt"]
+  
+  # Go projects
+  # - name: "Go Version"
+  #   cmd: "go"
+  #   args: ["version"]
+  
+  # - name: "Go Modules"
+  #   cmd: "go"
+  #   args: ["list", "-m", "all"]

@@ -1,0 +1,44 @@
+commands:
+  - name: "Current Branch"
+    cmd: "git"
+    args: ["branch", "--show-current"]
+  
+  - name: "Last Commit"
+    cmd: "git"
+    args: ["log", "-1", "--oneline"]
+  
+  - name: "Git Status"
+    cmd: "git"
+    args: ["status", "--short"]
+  
+  - name: "Uncommitted Changes"
+    cmd: "git"
+    args: ["diff", "--stat"]
+  
+  - name: "Remote URL"
+    cmd: "git"
+    args: ["remote", "get-url", "origin"]
+  
+  - name: "Last 5 Commits"
+    cmd: "git"
+    args: ["log", "-5", "--oneline"]
+  
+  - name: "Possible Email Addresses"
+    cmd: "rg"
+    args: ["-n", "[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", "-i"]
+  
+  - name: "Phone-like Patterns"
+    cmd: "rg"
+    args: ["-n", "\\b(\\+?\\d[\\d\\s\\-\\(\\)]{7,})\\b"]
+  
+  - name: "Common PII Keywords"
+    cmd: "rg"
+    args: ["-n", "address|ssn|social security|passport|driver.?license|credit card|dob|date of birth", "-i"]
+  
+  - name: "Common PHI/Medical Keywords"
+    cmd: "rg"
+    args: ["-n", "patient|diagnosis|diagnoses|treatment|clinical|hospital|medical record|mrn|ehr|phi|hipaa", "-i"]
+  
+  - name: "Lines of Code"
+    cmd: "cloc"
+    args: ["."]
