@@ -210,6 +210,7 @@ func (m *Model) reset() {
 	m.folderFilterText = ""
 	m.commandFilterText = ""
 	m.filterActive = false
+	m.focus = foldersFocus
 	m.folderCursorPos = 0
 	m.commandCursorPos = 0
 	m.folderScrollOffset = 0
