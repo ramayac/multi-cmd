@@ -24,7 +24,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleExecutionProgress(msg executionProgressMsg) (tea.Model, tea.Cmd) {
 	m.completedCommands++
-	m.currentExecRepo = msg.repoName
+	m.currentExecFolder = msg.folderName
 	m.currentExecCommand = msg.commandName
 	m.results = append(m.results, msg.result)
 	return m, nil
@@ -83,10 +83,10 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.filterActive = false
-		if m.focus == reposFocus {
-			m.repoFilterText = ""
-			m.repoCursorPos = 0
-			m.repoScrollOffset = 0
+		if m.focus == foldersFocus {
+			m.folderFilterText = ""
+			m.folderCursorPos = 0
+			m.folderScrollOffset = 0
 		} else {
 			m.commandFilterText = ""
 			m.commandCursorPos = 0
@@ -95,11 +95,11 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.filterActive = false
 	case "backspace":
-		if m.focus == reposFocus {
-			if len(m.repoFilterText) > 0 {
-				m.repoFilterText = m.repoFilterText[:len(m.repoFilterText)-1]
-				m.repoCursorPos = 0
-				m.repoScrollOffset = 0
+		if m.focus == foldersFocus {
+			if len(m.folderFilterText) > 0 {
+				m.folderFilterText = m.folderFilterText[:len(m.folderFilterText)-1]
+				m.folderCursorPos = 0
+				m.folderScrollOffset = 0
 			}
 		} else {
 			if len(m.commandFilterText) > 0 {
@@ -110,10 +110,10 @@ func (m Model) handleFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	default:
 		if len(msg.String()) == 1 {
-			if m.focus == reposFocus {
-				m.repoFilterText += msg.String()
-				m.repoCursorPos = 0
-				m.repoScrollOffset = 0
+			if m.focus == foldersFocus {
+				m.folderFilterText += msg.String()
+				m.folderCursorPos = 0
+				m.folderScrollOffset = 0
 			} else {
 				m.commandFilterText += msg.String()
 				m.commandCursorPos = 0
@@ -133,18 +133,26 @@ func (m Model) enableFilterMode() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleReset() (tea.Model, tea.Cmd) {
-	if m.currentView == mainView {
-		m.reset()
+	if m.currentView != mainView {
+		return m, nil
 	}
+
+	if err := m.reloadCommands(); err != nil {
+		m.addLog(fmt.Sprintf("Failed to reload commands: %v", err))
+		return m, nil
+	}
+
+	m.reset()
+	m.addLog(fmt.Sprintf("Reloaded commands from %s", m.configPath))
 	return m, nil
 }
 
 func (m Model) toggleFocus() (tea.Model, tea.Cmd) {
 	if m.currentView == mainView {
-		if m.focus == reposFocus {
+		if m.focus == foldersFocus {
 			m.focus = commandsFocus
 		} else {
-			m.focus = reposFocus
+			m.focus = foldersFocus
 		}
 	}
 	return m, nil
@@ -162,11 +170,11 @@ func (m Model) navigateUp() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.focus == reposFocus {
-		if m.repoCursorPos > 0 {
-			m.repoCursorPos--
-			if m.repoCursorPos < m.repoScrollOffset {
-				m.repoScrollOffset = m.repoCursorPos
+	if m.focus == foldersFocus {
+		if m.folderCursorPos > 0 {
+			m.folderCursorPos--
+			if m.folderCursorPos < m.folderScrollOffset {
+				m.folderScrollOffset = m.folderCursorPos
 			}
 		}
 	} else {
@@ -198,12 +206,12 @@ func (m Model) navigateDown() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.focus == reposFocus {
-		filtered := m.getFilteredRepos()
-		if m.repoCursorPos < len(filtered)-1 {
-			m.repoCursorPos++
-			if m.repoCursorPos >= m.repoScrollOffset+m.maxVisibleItems {
-				m.repoScrollOffset = m.repoCursorPos - m.maxVisibleItems + 1
+	if m.focus == foldersFocus {
+		filtered := m.getFilteredFolders()
+		if m.folderCursorPos < len(filtered)-1 {
+			m.folderCursorPos++
+			if m.folderCursorPos >= m.folderScrollOffset+m.maxVisibleItems {
+				m.folderScrollOffset = m.folderCursorPos - m.maxVisibleItems + 1
 			}
 		}
 	} else {
@@ -224,14 +232,14 @@ func (m Model) toggleSelection() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.focus == reposFocus {
-		filtered := m.getFilteredRepos()
-		if m.repoCursorPos < len(filtered) {
-			selectedName := filtered[m.repoCursorPos].Name
-			for i := range m.repos {
-				if m.repos[i].Name == selectedName {
-					m.repos[i].Selected = !m.repos[i].Selected
-					m.addLog(fmt.Sprintf("Toggled %s: %v", m.repos[i].Name, m.repos[i].Selected))
+	if m.focus == foldersFocus {
+		filtered := m.getFilteredFolders()
+		if m.folderCursorPos < len(filtered) {
+			selectedName := filtered[m.folderCursorPos].Name
+			for i := range m.folders {
+				if m.folders[i].Name == selectedName {
+					m.folders[i].Selected = !m.folders[i].Selected
+					m.addLog(fmt.Sprintf("Toggled %s: %v", m.folders[i].Name, m.folders[i].Selected))
 					break
 				}
 			}
@@ -258,29 +266,29 @@ func (m Model) toggleSelectAll() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.focus == reposFocus {
-		filtered := m.getFilteredRepos()
+	if m.focus == foldersFocus {
+		filtered := m.getFilteredFolders()
 		allSelected := true
-		for _, repo := range filtered {
-			if !repo.Selected {
+		for _, folder := range filtered {
+			if !folder.Selected {
 				allSelected = false
 				break
 			}
 		}
 
-		for i := range m.repos {
-			for _, fr := range filtered {
-				if m.repos[i].Name == fr.Name {
-					m.repos[i].Selected = !allSelected
+		for i := range m.folders {
+			for _, ff := range filtered {
+				if m.folders[i].Name == ff.Name {
+					m.folders[i].Selected = !allSelected
 					break
 				}
 			}
 		}
 
 		if allSelected {
-			m.addLog("Deselected all filtered repos")
+			m.addLog("Deselected all filtered folders")
 		} else {
-			m.addLog("Selected all filtered repos")
+			m.addLog("Selected all filtered folders")
 		}
 	} else {
 		filtered := m.getFilteredCommands()
@@ -333,20 +341,20 @@ func (m Model) handleExecute() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	hasRepos := false
-	for _, repo := range m.repos {
-		if repo.Selected {
-			hasRepos = true
+	hasFolders := false
+	for _, folder := range m.folders {
+		if folder.Selected {
+			hasFolders = true
 			break
 		}
 	}
 
-	if hasRepos && len(m.selectedCommands) > 0 {
+	if hasFolders && len(m.selectedCommands) > 0 {
 		return m.executeCommands()
 	}
 
-	if !hasRepos {
-		m.addLog("Error: No repositories selected!")
+	if !hasFolders {
+		m.addLog("Error: No folders selected!")
 	} else {
 		m.addLog("Error: No commands selected!")
 	}

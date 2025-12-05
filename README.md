@@ -1,6 +1,8 @@
 # Multi Commands (`multi-cmd`)
 
-`multi-cmd` is a Bubble Tea TUI that scans a directory for git repos (or any folders), lets you filter and select them, then runs the commands you chose from `commands.yaml` across each selection. It streams progress in the UI and saves a combined log/report to the output path you provide.
+`multi-cmd` is a Bubble Tea TUI that scans a directory for every subfolder, lets you filter and select them, then runs the commands you chose from `commands.yaml` across each selection. It streams progress in the UI and saves a combined log/report to the output path you provide.
+
+> Note: all immediate subdirectories are shown even if they are not git folders.
 
 ## Run It
 
@@ -23,5 +25,9 @@ The bundled `commands.yaml` expects these binaries to be on your PATH:
 - `rg` (ripgrep) – used for text scans
 - `cloc` – used for LOC metrics
 - `jq` – for JSON parsing/manipulation
+
+## Key Controls
+
+- `r` – Reset selections/filters and reload the active command file (default `commands.yaml` or the custom YAML you pass to `multi-cmd`).
 
 

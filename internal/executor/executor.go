@@ -9,17 +9,17 @@ import (
 	"github.com/ramayac/multi-cmd/internal/models"
 )
 
-// Execute runs the selected commands on the selected repositories
-func Execute(repos []models.Repository, commands []models.Command) []models.ExecutionResult {
+// Execute runs the selected commands on the selected folders
+func Execute(folders []models.Folder, commands []models.Command) []models.ExecutionResult {
 	var results []models.ExecutionResult
 
-	for _, repo := range repos {
-		if !repo.Selected {
+	for _, folder := range folders {
+		if !folder.Selected {
 			continue
 		}
 
 		for _, cmd := range commands {
-			result := ExecuteCommand(repo, cmd)
+			result := ExecuteCommand(folder, cmd)
 			results = append(results, result)
 		}
 	}
@@ -27,7 +27,7 @@ func Execute(repos []models.Repository, commands []models.Command) []models.Exec
 	return results
 }
 
-func ExecuteCommand(repo models.Repository, command models.Command) models.ExecutionResult {
+func ExecuteCommand(folder models.Folder, command models.Command) models.ExecutionResult {
 	// Build the full command string for display
 	cmdString := command.Cmd
 	if len(command.Args) > 0 {
@@ -37,14 +37,14 @@ func ExecuteCommand(repo models.Repository, command models.Command) models.Execu
 	}
 
 	result := models.ExecutionResult{
-		RepoName:        repo.Name,
-		RepoPath:        repo.Path,
+		FolderName:      folder.Name,
+		FolderPath:      folder.Path,
 		CommandName:     command.Name,
 		CommandExecuted: cmdString,
 	}
 
 	cmd := exec.Command(command.Cmd, command.Args...)
-	cmd.Dir = repo.Path
+	cmd.Dir = folder.Path
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -67,14 +67,14 @@ func ExecuteCommand(repo models.Repository, command models.Command) models.Execu
 func WriteResults(results []models.ExecutionResult, outputPath string) error {
 	var buf bytes.Buffer
 
-	buf.WriteString("# Repository Check Results\n\n")
+	buf.WriteString("# Folder Command Results\n\n")
 
-	currentRepo := ""
+	currentFolder := ""
 	for _, result := range results {
-		if result.RepoName != currentRepo {
-			currentRepo = result.RepoName
-			buf.WriteString(fmt.Sprintf("## %s\n", result.RepoName))
-			buf.WriteString(fmt.Sprintf("**Path:** `%s`\n\n", result.RepoPath))
+		if result.FolderName != currentFolder {
+			currentFolder = result.FolderName
+			buf.WriteString(fmt.Sprintf("## %s\n", result.FolderName))
+			buf.WriteString(fmt.Sprintf("**Path:** `%s`\n\n", result.FolderPath))
 		}
 
 		buf.WriteString(fmt.Sprintf("### %s\n", result.CommandName))

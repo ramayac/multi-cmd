@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ramayac/multi-cmd/internal/config"
 	"github.com/ramayac/multi-cmd/internal/executor"
 	"github.com/ramayac/multi-cmd/internal/models"
 )
@@ -21,12 +22,12 @@ const (
 type focusArea int
 
 const (
-	reposFocus focusArea = iota
+	foldersFocus focusArea = iota
 	commandsFocus
 )
 
 type executionProgressMsg struct {
-	repoName    string
+	folderName  string
 	commandName string
 	result      models.ExecutionResult
 }
@@ -61,7 +62,7 @@ var keys = keyMap{
 	),
 	Left: key.NewBinding(
 		key.WithKeys("left", "h"),
-		key.WithHelp("←/h", "repos panel"),
+		key.WithHelp("←/h", "folders panel"),
 	),
 	Right: key.NewBinding(
 		key.WithKeys("right", "l"),
@@ -89,7 +90,7 @@ var keys = keyMap{
 	),
 	Reset: key.NewBinding(
 		key.WithKeys("r"),
-		key.WithHelp("r", "reset"),
+		key.WithHelp("r", "reset & reload"),
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "ctrl+c"),
@@ -100,15 +101,16 @@ var keys = keyMap{
 type Model struct {
 	currentView         view
 	focus               focusArea
-	repos               []models.Repository
+	folders             []models.Folder
 	commands            []models.Command
 	selectedCommands    map[int]bool
-	repoCursorPos       int
+	configPath          string
+	folderCursorPos     int
 	commandCursorPos    int
-	repoScrollOffset    int
+	folderScrollOffset  int
 	commandScrollOffset int
 	outputScrollOffset  int
-	repoFilterText      string
+	folderFilterText    string
 	commandFilterText   string
 	filterActive        bool
 	scanPath            string
@@ -121,24 +123,25 @@ type Model struct {
 	maxVisibleItems     int
 	totalCommands       int
 	completedCommands   int
-	currentExecRepo     string
+	currentExecFolder   string
 	currentExecCommand  string
 }
 
 func NewModel(scanPath, configPath, outputPath string, config *models.Config) Model {
-	repos := scanRepositories(scanPath)
+	folders := scanFolders(scanPath)
 
 	return Model{
 		currentView:         mainView,
-		focus:               reposFocus,
-		repos:               repos,
+		focus:               foldersFocus,
+		folders:             folders,
 		commands:            config.Commands,
 		selectedCommands:    make(map[int]bool),
-		repoCursorPos:       0,
+		configPath:          configPath,
+		folderCursorPos:     0,
 		commandCursorPos:    0,
-		repoScrollOffset:    0,
+		folderScrollOffset:  0,
 		commandScrollOffset: 0,
-		repoFilterText:      "",
+		folderFilterText:    "",
 		commandFilterText:   "",
 		filterActive:        false,
 		scanPath:            scanPath,
@@ -149,17 +152,17 @@ func NewModel(scanPath, configPath, outputPath string, config *models.Config) Mo
 		maxVisibleItems:     15,
 		totalCommands:       0,
 		completedCommands:   0,
-		currentExecRepo:     "",
+		currentExecFolder:   "",
 		currentExecCommand:  "",
 	}
 }
 
-func scanRepositories(basePath string) []models.Repository {
-	var repos []models.Repository
+func scanFolders(basePath string) []models.Folder {
+	var folders []models.Folder
 
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
-		return repos
+		return folders
 	}
 
 	for _, entry := range entries {
@@ -168,17 +171,14 @@ func scanRepositories(basePath string) []models.Repository {
 		}
 
 		fullPath := filepath.Join(basePath, entry.Name())
-		gitPath := filepath.Join(fullPath, ".git")
-		if _, err := os.Stat(gitPath); err == nil {
-			repos = append(repos, models.Repository{
-				Path:     fullPath,
-				Name:     entry.Name(),
-				Selected: false,
-			})
-		}
+		folders = append(folders, models.Folder{
+			Path:     fullPath,
+			Name:     entry.Name(),
+			Selected: false,
+		})
 	}
 
-	return repos
+	return folders
 }
 
 func (m Model) Init() tea.Cmd {
@@ -192,17 +192,27 @@ func (m *Model) addLog(msg string) {
 	}
 }
 
+func (m *Model) reloadCommands() error {
+	cfg, err := config.Load(m.configPath)
+	if err != nil {
+		return err
+	}
+
+	m.commands = cfg.Commands
+	return nil
+}
+
 func (m *Model) reset() {
-	for i := range m.repos {
-		m.repos[i].Selected = false
+	for i := range m.folders {
+		m.folders[i].Selected = false
 	}
 	m.selectedCommands = make(map[int]bool)
-	m.repoFilterText = ""
+	m.folderFilterText = ""
 	m.commandFilterText = ""
 	m.filterActive = false
-	m.repoCursorPos = 0
+	m.folderCursorPos = 0
 	m.commandCursorPos = 0
-	m.repoScrollOffset = 0
+	m.folderScrollOffset = 0
 	m.commandScrollOffset = 0
 	m.outputLog = []string{"Ready to execute commands..."}
 	m.addLog("Reset: cleared all selections, filters, and output")
@@ -218,16 +228,16 @@ func (m Model) executeCommands() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	selectedRepoCount := 0
-	for _, repo := range m.repos {
-		if repo.Selected {
-			selectedRepoCount++
+	selectedFolderCount := 0
+	for _, folder := range m.folders {
+		if folder.Selected {
+			selectedFolderCount++
 		}
 	}
 
-	m.totalCommands = selectedRepoCount * len(selectedCmds)
+	m.totalCommands = selectedFolderCount * len(selectedCmds)
 	m.completedCommands = 0
-	m.currentExecRepo = ""
+	m.currentExecFolder = ""
 	m.currentExecCommand = ""
 
 	return m, m.executeCommandsAsync(selectedCmds)
@@ -237,13 +247,13 @@ func (m Model) executeCommandsAsync(selectedCmds []models.Command) tea.Cmd {
 	return func() tea.Msg {
 		var results []models.ExecutionResult
 
-		for _, repo := range m.repos {
-			if !repo.Selected {
+		for _, folder := range m.folders {
+			if !folder.Selected {
 				continue
 			}
 
 			for _, cmd := range selectedCmds {
-				result := executor.ExecuteCommand(repo, cmd)
+				result := executor.ExecuteCommand(folder, cmd)
 				results = append(results, result)
 			}
 		}

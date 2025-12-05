@@ -27,8 +27,8 @@ func (m Model) renderExecutingView() string {
 	percentage := float64(m.completedCommands) / float64(m.totalCommands) * 100
 	progress := fmt.Sprintf("\n\nProgress: %d/%d (%.0f%%)\n", m.completedCommands, m.totalCommands, percentage)
 
-	if m.currentExecRepo != "" {
-		progress += fmt.Sprintf("\nRepository: %s\n", m.currentExecRepo)
+	if m.currentExecFolder != "" {
+		progress += fmt.Sprintf("\nFolder: %s\n", m.currentExecFolder)
 	}
 	if m.currentExecCommand != "" {
 		progress += fmt.Sprintf("Command: %s\n", m.currentExecCommand)
@@ -56,22 +56,22 @@ func (m Model) renderDoneView() string {
 	s.WriteString(titleStyle.Render("🛠️  Multi Commands"))
 	s.WriteString("\n\n")
 
-	repoWidth := int(float64(m.windowWidth-4) * 0.7)
-	cmdWidth := m.windowWidth - repoWidth - 4
-	if repoWidth < 40 {
-		repoWidth = 40
+	folderWidth := int(float64(m.windowWidth-4) * 0.7)
+	cmdWidth := m.windowWidth - folderWidth - 4
+	if folderWidth < 40 {
+		folderWidth = 40
 	}
 	if cmdWidth < 25 {
 		cmdWidth = 25
 	}
 
-	filterSection := m.renderFilterSection(repoWidth, cmdWidth)
+	filterSection := m.renderFilterSection(folderWidth, cmdWidth)
 	s.WriteString(filterSection)
 	s.WriteString("\n")
 
-	reposPanel := m.renderReposPanel(repoWidth)
+	foldersPanel := m.renderFoldersPanel(folderWidth)
 	commandsPanel := m.renderCommandsPanel(cmdWidth)
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, reposPanel, commandsPanel)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, foldersPanel, commandsPanel)
 	s.WriteString(panels)
 
 	s.WriteString("\n")
@@ -89,22 +89,22 @@ func (m Model) renderMainView() string {
 	s.WriteString(titleStyle.Render("🛠️  Multi Commands"))
 	s.WriteString("\n\n")
 
-	repoWidth := int(float64(m.windowWidth-4) * 0.7)
-	cmdWidth := m.windowWidth - repoWidth - 4
-	if repoWidth < 40 {
-		repoWidth = 40
+	folderWidth := int(float64(m.windowWidth-4) * 0.7)
+	cmdWidth := m.windowWidth - folderWidth - 4
+	if folderWidth < 40 {
+		folderWidth = 40
 	}
 	if cmdWidth < 25 {
 		cmdWidth = 25
 	}
 
-	filterSection := m.renderFilterSection(repoWidth, cmdWidth)
+	filterSection := m.renderFilterSection(folderWidth, cmdWidth)
 	s.WriteString(filterSection)
 	s.WriteString("\n")
 
-	reposPanel := m.renderReposPanel(repoWidth)
+	foldersPanel := m.renderFoldersPanel(folderWidth)
 	commandsPanel := m.renderCommandsPanel(cmdWidth)
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, reposPanel, commandsPanel)
+	panels := lipgloss.JoinHorizontal(lipgloss.Top, foldersPanel, commandsPanel)
 	s.WriteString(panels)
 
 	s.WriteString("\n")
@@ -112,8 +112,8 @@ func (m Model) renderMainView() string {
 
 	s.WriteString("\n")
 	if m.filterActive {
-		if m.focus == reposFocus {
-			s.WriteString(helpStyle.Render("Filter Repos: " + m.repoFilterText + "█ • esc: cancel • enter: done"))
+		if m.focus == foldersFocus {
+			s.WriteString(helpStyle.Render("Filter Folders: " + m.folderFilterText + "█ • esc: cancel • enter: done"))
 		} else {
 			s.WriteString(helpStyle.Render("Filter Commands: " + m.commandFilterText + "█ • esc: cancel • enter: done"))
 		}
@@ -124,7 +124,7 @@ func (m Model) renderMainView() string {
 	return s.String()
 }
 
-func (m Model) renderFilterSection(repoWidth, cmdWidth int) string {
+func (m Model) renderFilterSection(folderWidth, cmdWidth int) string {
 	renderFilter := func(filterText string, isFocused, isActive bool, width int) string {
 		displayText := "(press / to filter)"
 		if filterText != "" {
@@ -142,41 +142,41 @@ func (m Model) renderFilterSection(repoWidth, cmdWidth int) string {
 		return style.Width(width).Render("🔍 Filter: " + displayText)
 	}
 
-	repoFilterPanel := renderFilter(m.repoFilterText, m.focus == reposFocus, m.filterActive, repoWidth)
+	folderFilterPanel := renderFilter(m.folderFilterText, m.focus == foldersFocus, m.filterActive, folderWidth)
 	cmdFilterPanel := renderFilter(m.commandFilterText, m.focus == commandsFocus, m.filterActive, cmdWidth)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, repoFilterPanel, cmdFilterPanel)
+	return lipgloss.JoinHorizontal(lipgloss.Top, folderFilterPanel, cmdFilterPanel)
 }
 
-func (m Model) renderReposPanel(width int) string {
-	filtered := m.getFilteredRepos()
+func (m Model) renderFoldersPanel(width int) string {
+	filtered := m.getFilteredFolders()
 
-	selectedRepos := make(map[string]bool)
-	for _, repo := range m.repos {
-		if repo.Selected {
-			selectedRepos[repo.Name] = true
+	selectedFolders := make(map[string]bool)
+	for _, folder := range m.folders {
+		if folder.Selected {
+			selectedFolders[folder.Name] = true
 		}
 	}
 
 	items := make([]string, len(filtered))
-	for i, repo := range filtered {
-		items[i] = repo.Name
+	for i, folder := range filtered {
+		items[i] = folder.Name
 	}
 
 	selectedCount := 0
-	for _, repo := range m.repos {
-		if repo.Selected {
+	for _, folder := range m.folders {
+		if folder.Selected {
 			selectedCount++
 		}
 	}
 
 	return m.renderListPanel(
-		"📁 Repositories",
+		"📁 Folders",
 		items,
-		selectedRepos,
-		m.repoCursorPos,
-		m.repoScrollOffset,
-		m.focus == reposFocus,
+		selectedFolders,
+		m.folderCursorPos,
+		m.folderScrollOffset,
+		m.focus == foldersFocus,
 		width,
 		selectedCount,
 	)
@@ -298,11 +298,11 @@ func (m Model) getTotalOutputLines() int {
 	}
 
 	totalLines := 3
-	currentRepo := ""
+	currentFolder := ""
 
 	for _, result := range m.results {
-		if result.RepoName != currentRepo {
-			currentRepo = result.RepoName
+		if result.FolderName != currentFolder {
+			currentFolder = result.FolderName
 			totalLines += 2
 		}
 
@@ -340,21 +340,21 @@ func (m Model) renderOutputPanel() string {
 			}
 		}
 
-		content.WriteString(fmt.Sprintf("Executed: %d commands on %d repos | Success: %d | Failed: %d\n",
-			len(m.selectedCommands), countSelected(m.repos), successCount, failCount))
+		content.WriteString(fmt.Sprintf("Executed: %d commands on %d folders | Success: %d | Failed: %d\n",
+			len(m.selectedCommands), countSelectedFolders(m.folders), successCount, failCount))
 	}
 
 	if m.err == nil && len(m.results) > 0 {
 		content.WriteString("\n")
 
 		var allLines []string
-		currentRepo := ""
+		currentFolder := ""
 		for _, result := range m.results {
-			if result.RepoName != currentRepo {
-				currentRepo = result.RepoName
+			if result.FolderName != currentFolder {
+				currentFolder = result.FolderName
 				allLines = append(allLines, "")
-				allLines = append(allLines, successStyle.Render("Repository: ")+result.RepoName)
-				allLines = append(allLines, dimmedStyle.Render("Path: ")+result.RepoPath)
+				allLines = append(allLines, successStyle.Render("Folder: ")+result.FolderName)
+				allLines = append(allLines, dimmedStyle.Render("Path: ")+result.FolderPath)
 			}
 
 			allLines = append(allLines, "")
@@ -394,10 +394,10 @@ func (m Model) renderOutputPanel() string {
 	return panelStyle.Width(m.windowWidth).Height(m.maxVisibleItems + 6).Render(content.String())
 }
 
-func countSelected(repos []models.Repository) int {
+func countSelectedFolders(folders []models.Folder) int {
 	count := 0
-	for _, repo := range repos {
-		if repo.Selected {
+	for _, folder := range folders {
+		if folder.Selected {
 			count++
 		}
 	}

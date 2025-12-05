@@ -9,7 +9,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "Usage examples:"
     echo "  ./multi-cmd                            # Scan current directory"
-    echo "  ./multi-cmd /path/to/repos             # Scan specific directory"
+    echo "  ./multi-cmd /path/to/open              # Scan specific directory"
     echo "  ./multi-cmd . commands.yaml            # Use custom config"
     echo "  ./multi-cmd . commands.yaml out.md     # Custom config and output"
     echo ""

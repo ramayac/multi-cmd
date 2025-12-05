@@ -6,16 +6,16 @@ import (
 	"github.com/ramayac/multi-cmd/internal/models"
 )
 
-func (m Model) getFilteredRepos() []models.Repository {
-	if m.repoFilterText == "" {
-		return m.repos
+func (m Model) getFilteredFolders() []models.Folder {
+	if m.folderFilterText == "" {
+		return m.folders
 	}
 
-	var filtered []models.Repository
-	filterLower := strings.ToLower(m.repoFilterText)
-	for _, repo := range m.repos {
-		if strings.Contains(strings.ToLower(repo.Name), filterLower) {
-			filtered = append(filtered, repo)
+	var filtered []models.Folder
+	filterLower := strings.ToLower(m.folderFilterText)
+	for _, folder := range m.folders {
+		if strings.Contains(strings.ToLower(folder.Name), filterLower) {
+			filtered = append(filtered, folder)
 		}
 	}
 

@@ -1,6 +1,6 @@
 package models
 
-// Command represents a command that can be executed on repositories
+// Command represents a command that can be executed on folders
 type Command struct {
 	Name string   `yaml:"name"`
 	Cmd  string   `yaml:"cmd"`
@@ -12,17 +12,17 @@ type Config struct {
 	Commands []Command `yaml:"commands"`
 }
 
-// Repository represents a selected repository folder
-type Repository struct {
+// Folder represents a selectable folder discovered in the scan path
+type Folder struct {
 	Path     string
 	Name     string
 	Selected bool
 }
 
-// ExecutionResult represents the result of executing a command on a repository
+// ExecutionResult represents the result of executing a command on a folder
 type ExecutionResult struct {
-	RepoName        string
-	RepoPath        string
+	FolderName      string
+	FolderPath      string
 	CommandName     string
 	CommandExecuted string
 	Output          string
