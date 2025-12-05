@@ -34,6 +34,7 @@ func (m Model) handleExecutionComplete(msg executionCompleteMsg) (tea.Model, tea
 	m.results = msg.results
 	m.err = msg.err
 	m.currentView = doneView
+	m.outputScrollOffset = 0
 	return m, nil
 }
 
@@ -137,13 +138,8 @@ func (m Model) handleReset() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if err := m.reloadCommands(); err != nil {
-		m.addLog(fmt.Sprintf("Failed to reload commands: %v", err))
-		return m, nil
-	}
-
 	m.reset()
-	m.addLog(fmt.Sprintf("Reloaded commands from %s", m.configPath))
+	m.addLog("Reset selections, filters, and output")
 	return m, nil
 }
 
@@ -192,7 +188,11 @@ func (m Model) navigateUp() (tea.Model, tea.Cmd) {
 func (m Model) navigateDown() (tea.Model, tea.Cmd) {
 	if m.currentView == doneView {
 		totalLines := m.getTotalOutputLines()
-		maxScroll := totalLines - m.maxVisibleItems
+		visible := m.visibleLinesForHeight(m.windowHeight)
+		if visible > totalLines {
+			visible = totalLines
+		}
+		maxScroll := totalLines - visible
 		if maxScroll < 0 {
 			maxScroll = 0
 		}

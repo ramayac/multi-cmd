@@ -18,6 +18,8 @@ func main() {
 	scanPath := "."
 	outputPath := fmt.Sprintf("multi-cmd-results-%s.md", time.Now().Format("2006-01-02-150405"))
 
+	defer fmt.Print("\033[H\033[2J")
+
 	// Parse command line arguments
 	if len(os.Args) > 1 {
 		scanPath = os.Args[1]

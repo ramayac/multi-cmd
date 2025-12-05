@@ -1,12 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/ramayac/multi-cmd/internal/config"
 	"github.com/ramayac/multi-cmd/internal/executor"
 	"github.com/ramayac/multi-cmd/internal/models"
 )
@@ -104,7 +105,6 @@ type Model struct {
 	folders             []models.Folder
 	commands            []models.Command
 	selectedCommands    map[int]bool
-	configPath          string
 	folderCursorPos     int
 	commandCursorPos    int
 	folderScrollOffset  int
@@ -129,6 +129,9 @@ type Model struct {
 
 func NewModel(scanPath, configPath, outputPath string, config *models.Config) Model {
 	folders := scanFolders(scanPath)
+	if outputPath == "" {
+		outputPath = defaultOutputPath()
+	}
 
 	return Model{
 		currentView:         mainView,
@@ -136,7 +139,6 @@ func NewModel(scanPath, configPath, outputPath string, config *models.Config) Mo
 		folders:             folders,
 		commands:            config.Commands,
 		selectedCommands:    make(map[int]bool),
-		configPath:          configPath,
 		folderCursorPos:     0,
 		commandCursorPos:    0,
 		folderScrollOffset:  0,
@@ -192,16 +194,6 @@ func (m *Model) addLog(msg string) {
 	}
 }
 
-func (m *Model) reloadCommands() error {
-	cfg, err := config.Load(m.configPath)
-	if err != nil {
-		return err
-	}
-
-	m.commands = cfg.Commands
-	return nil
-}
-
 func (m *Model) reset() {
 	for i := range m.folders {
 		m.folders[i].Selected = false
@@ -221,6 +213,9 @@ func (m *Model) reset() {
 
 func (m Model) executeCommands() (tea.Model, tea.Cmd) {
 	m.currentView = executingView
+	if m.outputPath == "" {
+		m.outputPath = defaultOutputPath()
+	}
 
 	var selectedCmds []models.Command
 	for i, selected := range m.selectedCommands {
@@ -266,4 +261,8 @@ func (m Model) executeCommandsAsync(selectedCmds []models.Command) tea.Cmd {
 			err:     err,
 		}
 	}
+}
+
+func defaultOutputPath() string {
+	return fmt.Sprintf("multi-cmd-results-%s.md", time.Now().Format("2006-01-02-150405"))
 }

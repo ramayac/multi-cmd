@@ -51,36 +51,9 @@ func (m Model) renderExecutingView() string {
 }
 
 func (m Model) renderDoneView() string {
-	var s strings.Builder
-
-	s.WriteString(titleStyle.Render("🛠️  Multi Commands"))
-	s.WriteString("\n\n")
-
-	folderWidth := int(float64(m.windowWidth-4) * 0.7)
-	cmdWidth := m.windowWidth - folderWidth - 4
-	if folderWidth < 40 {
-		folderWidth = 40
-	}
-	if cmdWidth < 25 {
-		cmdWidth = 25
-	}
-
-	filterSection := m.renderFilterSection(folderWidth, cmdWidth)
-	s.WriteString(filterSection)
-	s.WriteString("\n")
-
-	foldersPanel := m.renderFoldersPanel(folderWidth)
-	commandsPanel := m.renderCommandsPanel(cmdWidth)
-	panels := lipgloss.JoinHorizontal(lipgloss.Top, foldersPanel, commandsPanel)
-	s.WriteString(panels)
-
-	s.WriteString("\n")
-	s.WriteString(m.renderOutputPanel())
-
-	s.WriteString("\n")
-	s.WriteString(helpStyle.Render("↑/↓: scroll output • enter: return to main • q: quit"))
-
-	return s.String()
+	panel := m.renderExecutionPanel()
+	help := helpStyle.Render("↑/↓: scroll output • enter: return to main • q: quit")
+	return lipgloss.JoinVertical(lipgloss.Left, panel, help)
 }
 
 func (m Model) renderMainView() string {
@@ -219,6 +192,37 @@ func (m Model) renderListPanel(
 	width int,
 	totalSelected int,
 ) string {
+	content := m.renderListContent(
+		header,
+		items,
+		selectedItems,
+		cursorPos,
+		scrollOffset,
+		isFocused,
+		true,
+		fmt.Sprintf("%d/%d selected", totalSelected, len(items)),
+		m.maxVisibleItems,
+	)
+
+	style := inactivePanelStyle
+	if isFocused {
+		style = activePanelStyle
+	}
+
+	return style.Width(width).Height(m.maxVisibleItems + 4).Render(content)
+}
+
+func (m Model) renderListContent(
+	header string,
+	items []string,
+	selectedItems map[string]bool,
+	cursorPos int,
+	scrollOffset int,
+	isFocused bool,
+	showSelection bool,
+	footer string,
+	maxVisible int,
+) string {
 	var content strings.Builder
 
 	content.WriteString(header + "\n")
@@ -227,7 +231,7 @@ func (m Model) renderListPanel(
 		content.WriteString("\nNo items match filter\n")
 	} else {
 		start := scrollOffset
-		end := scrollOffset + m.maxVisibleItems
+		end := scrollOffset + maxVisible
 		if end > len(items) {
 			end = len(items)
 		}
@@ -239,21 +243,25 @@ func (m Model) renderListPanel(
 
 		for i := start; i < end; i++ {
 			itemName := items[i]
-			cursor := " "
-			if i == cursorPos && isFocused {
-				cursor = ">"
-			}
+			if showSelection {
+				cursor := " "
+				if i == cursorPos && isFocused {
+					cursor = ">"
+				}
 
-			checkbox := "[ ]"
-			if selectedItems[itemName] {
-				checkbox = "[✓]"
-			}
+				checkbox := "[ ]"
+				if selectedItems != nil && selectedItems[itemName] {
+					checkbox = "[✓]"
+				}
 
-			line := fmt.Sprintf("%s %s %s", cursor, checkbox, itemName)
-			if i == cursorPos && isFocused {
-				content.WriteString(selectedStyle.Render(line))
+				line := fmt.Sprintf("%s %s %s", cursor, checkbox, itemName)
+				if i == cursorPos && isFocused {
+					content.WriteString(selectedStyle.Render(line))
+				} else {
+					content.WriteString(line)
+				}
 			} else {
-				content.WriteString(line)
+				content.WriteString(itemName)
 			}
 			content.WriteString("\n")
 		}
@@ -264,14 +272,12 @@ func (m Model) renderListPanel(
 		}
 	}
 
-	content.WriteString(fmt.Sprintf("\n%d/%d selected", totalSelected, len(items)))
-
-	style := inactivePanelStyle
-	if isFocused {
-		style = activePanelStyle
+	if footer != "" {
+		content.WriteString("\n")
+		content.WriteString(footer)
 	}
 
-	return style.Width(width).Height(m.maxVisibleItems + 4).Render(content.String())
+	return content.String()
 }
 
 func (m Model) renderOutputLog() string {
@@ -289,109 +295,122 @@ func (m Model) renderOutputLog() string {
 		content.WriteString("\n")
 	}
 
-	return panelStyle.Width(m.windowWidth).Render(content.String())
+	return panelStyle.Width(m.windowWidth - 2).Render(content.String())
 }
 
 func (m Model) getTotalOutputLines() int {
-	if m.err != nil {
-		return 5
+	return len(m.executionPanelLines())
+}
+
+func (m Model) renderExecutionPanel() string {
+	lines := m.executionPanelLines()
+	if len(lines) == 0 {
+		lines = []string{"No execution results yet"}
 	}
 
-	totalLines := 3
-	currentFolder := ""
+	maxVisible := m.visibleLinesForHeight(m.windowHeight)
+	if maxVisible > len(lines) {
+		maxVisible = len(lines)
+	}
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
 
+	scrollOffset := m.outputScrollOffset
+	maxScroll := len(lines) - maxVisible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if scrollOffset > maxScroll {
+		scrollOffset = maxScroll
+	} else if scrollOffset < 0 {
+		scrollOffset = 0
+	}
+
+	content := m.renderListContent(
+		"📊 Execution Output",
+		lines,
+		nil,
+		-1,
+		scrollOffset,
+		false,
+		false,
+		"",
+		maxVisible,
+	)
+
+	return executionPanelStyle.
+		Width(m.contentWidthForPanel(m.windowWidth - 2)).
+		Height(m.contentHeightForPanel(m.windowHeight)).
+		Render(content)
+}
+
+func (m Model) executionPanelLines() []string {
+	var lines []string
+
+	if m.err != nil {
+		lines = append(lines, "❌ Error", "")
+		lines = append(lines, fmt.Sprintf("Error writing results: %v", m.err))
+		return lines
+	}
+
+	successCount := 0
+	failCount := 0
+	for _, result := range m.results {
+		if result.Success {
+			successCount++
+		} else {
+			failCount++
+		}
+	}
+
+	folderCount := countSelectedFolders(m.folders)
+	selectedCmdCount := 0
+	for _, selected := range m.selectedCommands {
+		if selected {
+			selectedCmdCount++
+		}
+	}
+
+	lines = append(lines, "✅ Execution Complete", "")
+	if m.outputPath != "" {
+		lines = append(lines, fmt.Sprintf("Results written to: %s", m.outputPath))
+	} else {
+		lines = append(lines, "Results file path unavailable")
+	}
+	lines = append(lines, fmt.Sprintf("Executed: %d commands on %d folders | Success: %d | Failed: %d",
+		selectedCmdCount, folderCount, successCount, failCount))
+
+	if len(m.results) == 0 {
+		return lines
+	}
+
+	currentFolder := ""
 	for _, result := range m.results {
 		if result.FolderName != currentFolder {
 			currentFolder = result.FolderName
-			totalLines += 2
+			lines = append(lines, "")
+			lines = append(lines, successStyle.Render("Folder: ")+result.FolderName)
+			lines = append(lines, dimmedStyle.Render("Path: ")+result.FolderPath)
 		}
 
-		totalLines++
+		lines = append(lines, "")
+		lines = append(lines, fmt.Sprintf("Command: %s", result.CommandName))
+		lines = append(lines, dimmedStyle.Render(fmt.Sprintf("Executed: %s", result.CommandExecuted)))
 
 		if result.Success {
-			lines := strings.Split(result.Output, "\n")
-			totalLines += len(lines) + 1
+			trimmed := strings.TrimRight(result.Output, "\n")
+			if trimmed == "" {
+				lines = append(lines, dimmedStyle.Render("(no output)"))
+			} else {
+				lines = append(lines, strings.Split(trimmed, "\n")...)
+			}
 		} else {
-			totalLines++
-		}
-		totalLines++
-	}
-
-	return totalLines
-}
-
-func (m Model) renderOutputPanel() string {
-	var content strings.Builder
-
-	if m.err != nil {
-		content.WriteString("❌ Error\n\n")
-		content.WriteString(fmt.Sprintf("Error writing results: %v\n", m.err))
-	} else {
-		content.WriteString("✅ Execution Complete\n\n")
-		content.WriteString(fmt.Sprintf("Results written to: %s\n", m.outputPath))
-
-		successCount := 0
-		failCount := 0
-		for _, result := range m.results {
-			if result.Success {
-				successCount++
-			} else {
-				failCount++
-			}
-		}
-
-		content.WriteString(fmt.Sprintf("Executed: %d commands on %d folders | Success: %d | Failed: %d\n",
-			len(m.selectedCommands), countSelectedFolders(m.folders), successCount, failCount))
-	}
-
-	if m.err == nil && len(m.results) > 0 {
-		content.WriteString("\n")
-
-		var allLines []string
-		currentFolder := ""
-		for _, result := range m.results {
-			if result.FolderName != currentFolder {
-				currentFolder = result.FolderName
-				allLines = append(allLines, "")
-				allLines = append(allLines, successStyle.Render("Folder: ")+result.FolderName)
-				allLines = append(allLines, dimmedStyle.Render("Path: ")+result.FolderPath)
-			}
-
-			allLines = append(allLines, "")
-			allLines = append(allLines, fmt.Sprintf("Command: %s", result.CommandName))
-			allLines = append(allLines, dimmedStyle.Render(fmt.Sprintf("Executed: %s", result.CommandExecuted)))
-
-			if result.Success {
-				lines := strings.Split(strings.TrimRight(result.Output, "\n"), "\n")
-				for _, line := range lines {
-					allLines = append(allLines, line)
-				}
-			} else {
-				allLines = append(allLines, errorStyle.Render(fmt.Sprintf("Error: %s", result.Error)))
-			}
-		}
-
-		start := m.outputScrollOffset
-		end := start + m.maxVisibleItems
-		if end > len(allLines) {
-			end = len(allLines)
-		}
-
-		if m.outputScrollOffset > 0 {
-			content.WriteString(dimmedStyle.Render(fmt.Sprintf("▲ %d more above...\n", m.outputScrollOffset)))
-		}
-
-		for i := start; i < end; i++ {
-			content.WriteString(allLines[i])
-			content.WriteString("\n")
-		}
-
-		if end < len(allLines) {
-			content.WriteString(dimmedStyle.Render(fmt.Sprintf("▼ %d more below...", len(allLines)-end)))
+			lines = append(lines, errorStyle.Render(fmt.Sprintf("Error: %s", result.Error)))
 		}
 	}
 
-	return panelStyle.Width(m.windowWidth).Height(m.maxVisibleItems + 6).Render(content.String())
+	return lines
 }
 
 func countSelectedFolders(folders []models.Folder) int {
@@ -402,4 +421,28 @@ func countSelectedFolders(folders []models.Folder) int {
 		}
 	}
 	return count
+}
+
+func (m Model) visibleLinesForHeight(height int) int {
+	lines := height - 6
+	if lines < 5 {
+		lines = 5
+	}
+	return lines
+}
+
+func (m Model) contentWidthForPanel(fullWidth int) int {
+	width := fullWidth - 4 // account for 1 padding each side + border
+	if width < 10 {
+		width = 10
+	}
+	return width
+}
+
+func (m Model) contentHeightForPanel(fullHeight int) int {
+	height := fullHeight - 2 // border top/bottom
+	if height < 5 {
+		height = 5
+	}
+	return height
 }
